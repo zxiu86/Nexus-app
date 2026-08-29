@@ -1,0 +1,65 @@
+name: Nexus Android CI/CD Build & Release
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release APK (v9.1.1)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./gradlew || true
+
+      - name: Build Debug & Release APK
+        run: |
+          ./gradlew assembleDebug --stacktrace || gradle assembleDebug
+
+      - name: Extract Version Info
+        id: version_step
+        run: |
+          echo "VERSION_NAME=9.1.1" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v9.1.1" >> $GITHUB_ENV
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nexus-app-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || 'v9.1.1' }}
+          name: "Nexus v${{ env.VERSION_NAME || '9.1.1' }}"
+          body: |
+            ## 🚀 إصدار جديد لتطبيق Nexus v9.1.1
+            
+            - تم تحديث قارئ الفصول ودعم التصفح العمودي السريع.
+            - تم ربط جلب الفصول والبيانات من مستودع البيانات السحابي.
+            - نظام التحديث المباشر من داخل التطبيق (In-App Direct Update).
+          draft: false
+          prerelease: false
+          files: |
+            app/build/outputs/apk/debug/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
