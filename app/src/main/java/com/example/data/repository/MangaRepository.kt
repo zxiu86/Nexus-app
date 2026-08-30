@@ -41,9 +41,93 @@ class MangaRepository(context: Context) {
 
     // Dynamic chapter cache with loaded images
     private val loadedChaptersCache = mutableMapOf<String, Chapter>()
+    private val cacheDir = context.cacheDir
 
     init {
         loadPreferences()
+        loadMangaFromDiskCache()
+    }
+
+    private fun loadMangaFromDiskCache() {
+        try {
+            val cacheFile = java.io.File(cacheDir, "nexus_works_cache.json")
+            if (cacheFile.exists() && cacheFile.length() > 0) {
+                val json = cacheFile.readText()
+                val mapType = Types.newParameterizedType(
+                    Map::class.java,
+                    String::class.java,
+                    WorkDto::class.java
+                )
+                val adapter = GitHubNetworkModule.moshi.adapter<Map<String, WorkDto>>(mapType)
+                val worksMap = adapter.fromJson(json) ?: emptyMap()
+                if (worksMap.isNotEmpty()) {
+                    val restoredList = worksMap.map { (key, workDto) ->
+                        val slug = workDto.slug ?: key
+                        val info = loadSeriesInfoFromDiskCache(slug)
+                        convertToMangaItem(slug, workDto, info)
+                    }
+                    if (restoredList.isNotEmpty()) {
+                        _allMangaFlow.value = restoredList
+                        Log.d(TAG, "Restored ${restoredList.size} works from disk cache.")
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed reading works disk cache: ${e.message}")
+        }
+    }
+
+    private fun saveWorksToDiskCache(worksJsonStr: String) {
+        try {
+            val cacheFile = java.io.File(cacheDir, "nexus_works_cache.json")
+            cacheFile.writeText(worksJsonStr)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed saving works to disk cache: ${e.message}")
+        }
+    }
+
+    private fun saveSeriesInfoToDiskCache(slug: String, infoJson: String) {
+        try {
+            val cacheFile = java.io.File(cacheDir, "nexus_series_${slug}_cache.json")
+            cacheFile.writeText(infoJson)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed saving series info disk cache: ${e.message}")
+        }
+    }
+
+    private fun loadSeriesInfoFromDiskCache(slug: String): SeriesInfoDto? {
+        return try {
+            val cacheFile = java.io.File(cacheDir, "nexus_series_${slug}_cache.json")
+            if (cacheFile.exists() && cacheFile.length() > 0) {
+                val json = cacheFile.readText()
+                val adapter = GitHubNetworkModule.moshi.adapter(SeriesInfoDto::class.java)
+                adapter.fromJson(json)
+            } else null
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun saveChapterDetailToDiskCache(mangaId: String, chapterNumber: Int, json: String) {
+        try {
+            val cacheFile = java.io.File(cacheDir, "nexus_ch_${mangaId}_${chapterNumber}.json")
+            cacheFile.writeText(json)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed saving chapter detail cache: ${e.message}")
+        }
+    }
+
+    private fun loadChapterDetailFromDiskCache(mangaId: String, chapterNumber: Int): ChapterDetailDto? {
+        return try {
+            val cacheFile = java.io.File(cacheDir, "nexus_ch_${mangaId}_${chapterNumber}.json")
+            if (cacheFile.exists() && cacheFile.length() > 0) {
+                val json = cacheFile.readText()
+                val adapter = GitHubNetworkModule.moshi.adapter(ChapterDetailDto::class.java)
+                adapter.fromJson(json)
+            } else null
+        } catch (e: Exception) {
+            null
+        }
     }
 
     private fun loadPreferences() {
@@ -115,6 +199,8 @@ class MangaRepository(context: Context) {
             }
 
             val worksJsonStr = worksResponse.body()!!.string()
+            saveWorksToDiskCache(worksJsonStr)
+
             val mapType = Types.newParameterizedType(
                 Map::class.java,
                 String::class.java,
@@ -140,7 +226,7 @@ class MangaRepository(context: Context) {
             }
 
             _allMangaFlow.value = fullMangaList
-            Log.d(TAG, "Successfully loaded ${fullMangaList.size} works from GitHub!")
+            Log.d(TAG, "Successfully loaded and cached ${fullMangaList.size} works from GitHub!")
             Result.success(fullMangaList)
         } catch (e: Exception) {
             Log.e(TAG, "Error refreshing data from GitHub", e)
@@ -158,14 +244,15 @@ class MangaRepository(context: Context) {
             val response = GitHubNetworkModule.apiService.getSeriesInfoRaw(owner, repo, slug, branch)
             if (response.isSuccessful && response.body() != null) {
                 val json = response.body()!!.string()
+                saveSeriesInfoToDiskCache(slug, json)
                 val adapter = GitHubNetworkModule.moshi.adapter(SeriesInfoDto::class.java)
                 adapter.fromJson(json)
             } else {
-                null
+                loadSeriesInfoFromDiskCache(slug)
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Could not fetch info.json for $slug: ${e.message}")
-            null
+            Log.w(TAG, "Could not fetch info.json for $slug, trying cache: ${e.message}")
+            loadSeriesInfoFromDiskCache(slug)
         }
     }
 
@@ -253,6 +340,7 @@ class MangaRepository(context: Context) {
 
                 if (response.isSuccessful && response.body() != null) {
                     val json = response.body()!!.string()
+                    saveChapterDetailToDiskCache(mangaId, chapterNumber, json)
                     val adapter = GitHubNetworkModule.moshi.adapter(ChapterDetailDto::class.java)
                     val detail = adapter.fromJson(json)
 
@@ -278,7 +366,30 @@ class MangaRepository(context: Context) {
                     }
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Remote chapter fetch failed for $mangaId ch $chapterNumber: ${e.message}")
+                Log.w(TAG, "Remote chapter fetch failed for $mangaId ch $chapterNumber, checking disk cache: ${e.message}")
+            }
+
+            // Check if available in disk cache
+            val cachedDetail = loadChapterDetailFromDiskCache(mangaId, chapterNumber)
+            if (cachedDetail != null && !cachedDetail.images.isNullOrEmpty()) {
+                val pages = cachedDetail.images.mapIndexed { idx, url ->
+                    ChapterPage(
+                        pageNumber = idx + 1,
+                        imageUrl = url,
+                        caption = "صفحة ${idx + 1}"
+                    )
+                }
+                val chapter = Chapter(
+                    id = "${mangaId}_ch_$chapterNumber",
+                    mangaId = mangaId,
+                    number = chapterNumber,
+                    title = cachedDetail.title ?: "الفصل $chapterNumber",
+                    releaseDate = "اليوم",
+                    pagesCount = pages.size,
+                    pages = pages
+                )
+                loadedChaptersCache[cacheKey] = chapter
+                return@withContext chapter
             }
 
             // Fallback to local chapter representation
