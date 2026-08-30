@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build & Release APK (v9.1.1)
+    name: Build & Release APK (Auto Release)
     runs-on: ubuntu-latest
 
     steps:
@@ -37,34 +37,41 @@ jobs:
               -dname "CN=Android Debug,O=Android,C=US"
           fi
 
-      - name: Build Debug & Release APK
+      - name: Build Debug APK
         run: |
           ./gradlew assembleDebug --stacktrace || gradle assembleDebug
 
       - name: Extract Version Info
         id: version_step
         run: |
-          echo "VERSION_NAME=9.1.1" >> $GITHUB_ENV
-          echo "RELEASE_TAG=v9.1.1" >> $GITHUB_ENV
+          VERSION=$(grep 'versionName = ' app/build.gradle.kts | sed -E 's/.*versionName = "([^"]+)".*/\1/' || echo "1.1")
+          if [ -z "$VERSION" ]; then VERSION="1.1"; fi
+          echo "VERSION_NAME=$VERSION" >> $GITHUB_ENV
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v$VERSION"
+          fi
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+          echo "Detected App Version: $VERSION, Target Release Tag: $TAG"
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nexus-app-debug
+          name: nexus-app-v1.1-debug
           path: app/build/outputs/apk/debug/*.apk
 
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+      - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name || 'v9.1.1' }}
-          name: "Nexus v${{ env.VERSION_NAME || '9.1.1' }}"
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "Nexus Manga v${{ env.VERSION_NAME }}"
           body: |
-            ## 🚀 إصدار جديد لتطبيق Nexus v9.1.1
+            ## 🚀 إصدار جديد لتطبيق Nexus Manga (${{ env.RELEASE_TAG }})
             
-            - تم تحديث قارئ الفصول ودعم التصفح العمودي السريع.
-            - تم ربط جلب الفصول والبيانات من مستودع البيانات السحابي.
-            - نظام التحديث المباشر من داخل التطبيق (In-App Direct Update).
+            - تحديث نظام جلب البيانات والتوافق الكامل مع مستودع `Data`.
+            - تحسين قارئ الفصول للمانها والمانهوا الطولية بدقة كاملة.
+            - دعم نظام التحديث الديناميكي التلقائي من داخل التطبيق.
           draft: false
           prerelease: false
           files: |

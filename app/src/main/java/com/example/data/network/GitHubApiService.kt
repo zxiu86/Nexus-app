@@ -50,6 +50,18 @@ interface GitHubApiService {
     ): Response<ResponseBody>
 
     /**
+     * Generic content fetcher for any path in repo with raw and json headers
+     */
+    @GET("repos/{owner}/{repo}/contents/{path}")
+    @Headers("Accept: application/vnd.github.v3.raw, application/vnd.github.raw+json, application/json")
+    suspend fun getContentRaw(
+        @Path("owner") owner: String,
+        @Path("repo") repo: String,
+        @Path(value = "path", encoded = true) path: String,
+        @Query("ref") branch: String = "main"
+    ): Response<ResponseBody>
+
+    /**
      * Gets the latest release info for in-app update checks
      */
     @GET("repos/{owner}/{repo}/releases/latest")

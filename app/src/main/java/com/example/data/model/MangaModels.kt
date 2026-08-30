@@ -72,9 +72,14 @@ data class MangaItem(
 @JsonClass(generateAdapter = true)
 data class WorkDto(
     val slug: String? = null,
+    val id: String? = null,
     val title: String? = null,
+    val name: String? = null,
     val cover: String? = null,
+    val thumbnail: String? = null,
+    val image: String? = null,
     val summary: String? = null,
+    val description: String? = null,
     val type: String? = null,
     val author: String? = null,
     val artist: String? = null,
@@ -103,7 +108,8 @@ data class ChapterDetailDto(
     val chapter: Int = 1,
     val title: String? = null,
     @Json(name = "total_images") val totalImages: Int? = null,
-    val images: List<String>? = emptyList()
+    val images: List<String>? = emptyList(),
+    val pages: List<String>? = emptyList()
 )
 
 // ----------------------------------------------------
@@ -131,7 +137,7 @@ data class AppUpdateState(
     val isChecking: Boolean = false,
     val updateAvailable: Boolean = false,
     val latestVersion: String = "",
-    val currentVersion: String = "9.1.1",
+    val currentVersion: String = "1.1",
     val releaseNotes: String = "",
     val downloadUrl: String = "",
     val isDownloading: Boolean = false,

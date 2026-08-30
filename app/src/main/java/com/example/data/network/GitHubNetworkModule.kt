@@ -36,7 +36,7 @@ object GitHubNetworkModule {
     private val authInterceptor = Interceptor { chain ->
         val originalRequest = chain.request()
         val builder = originalRequest.newBuilder()
-            .header("User-Agent", "Nexus-Manga-App-Android/9.1.1")
+            .header("User-Agent", "Nexus-Manga-App-Android/1.1")
 
         // Retrieve token safely from BuildConfig or fallback to default
         val token = runCatching {
@@ -50,10 +50,10 @@ object GitHubNetworkModule {
         }
 
         if (finalToken.isNotEmpty()) {
-            val authHeader = if (finalToken.startsWith("Bearer ") || finalToken.startsWith("token ")) {
-                finalToken
-            } else {
-                "Bearer $finalToken"
+            val authHeader = when {
+                finalToken.startsWith("Bearer ") || finalToken.startsWith("token ") -> finalToken
+                finalToken.startsWith("ghp_") -> "token $finalToken"
+                else -> "Bearer $finalToken"
             }
             builder.header("Authorization", authHeader)
         }

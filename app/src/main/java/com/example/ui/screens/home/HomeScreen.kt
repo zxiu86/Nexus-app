@@ -237,7 +237,7 @@ fun NexusHomeTopBar(
 
             Column {
                 Text(
-                    text = "NEXUS v9.1.1",
+                    text = "NEXUS v1.1",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Black,
                         letterSpacing = 1.5.sp,
