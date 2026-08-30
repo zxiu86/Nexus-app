@@ -33,6 +33,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.Close
@@ -40,7 +41,6 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FormatListNumbered
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.NavigateBefore
 import androidx.compose.material.icons.filled.NavigateNext
 import androidx.compose.material.icons.filled.Search
@@ -76,6 +76,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -83,6 +84,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
 import com.example.data.model.Chapter
 import com.example.data.model.MangaItem
 import androidx.compose.material3.CircularProgressIndicator
@@ -573,6 +576,7 @@ fun ChapterStartBanner(manga: MangaItem, chapter: Chapter) {
 
 /**
  * Single Comic Page item in continuous webtoon scroll
+ * Uses ContentScale.FillWidth and full unbounded vertical height so manhwa strips never get cropped!
  */
 @Composable
 fun ComicPageItem(
@@ -584,18 +588,102 @@ fun ComicPageItem(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 1.dp)
             .background(Color.Black)
     ) {
-        NexusMangaImage(
-            imageUrl = imageUrl,
-            fallbackRes = pageRes,
-            contentDescription = "صفحة $pageNumber من $totalPages",
-            contentScale = ContentScale.FillWidth,
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(0.65f)
-        )
+        if (!imageUrl.isNullOrBlank() && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+            SubcomposeAsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "صفحة $pageNumber من $totalPages",
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth(),
+                loading = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(320.dp)
+                            .background(SurfaceCard.copy(alpha = 0.4f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(28.dp),
+                                color = NexusPurple,
+                                strokeWidth = 2.5.dp
+                            )
+                            Text(
+                                text = "جاري تحميل صفحة $pageNumber...",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = TextTertiary,
+                                    fontSize = 11.sp
+                                )
+                            )
+                        }
+                    }
+                },
+                error = {
+                    if (pageRes != null && pageRes != 0) {
+                        Image(
+                            painter = painterResource(id = pageRes),
+                            contentDescription = "صفحة $pageNumber من $totalPages",
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(220.dp)
+                                .background(SurfaceCard),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                    contentDescription = null,
+                                    tint = TextTertiary,
+                                    modifier = Modifier.size(36.dp)
+                                )
+                                Text(
+                                    text = "تعذر تحميل الصفحة $pageNumber",
+                                    style = MaterialTheme.typography.labelMedium.copy(color = TextSecondary)
+                                )
+                            }
+                        }
+                    }
+                }
+            )
+        } else if (pageRes != null && pageRes != 0) {
+            Image(
+                painter = painterResource(id = pageRes),
+                contentDescription = "صفحة $pageNumber من $totalPages",
+                contentScale = ContentScale.FillWidth,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+                    .background(SurfaceCard),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                    contentDescription = null,
+                    tint = TextTertiary,
+                    modifier = Modifier.size(36.dp)
+                )
+            }
+        }
 
         // Subtle Page Number Stamp
         Surface(
